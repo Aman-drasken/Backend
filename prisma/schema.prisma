@@ -1,0 +1,206 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+
+
+// ------------------------------
+// USER / EMPLOYEE / ADMIN / SUPER_ADMIN
+// ------------------------------
+model User {
+  id        String  @id @default(uuid())
+  firstName String
+  lastName  String
+  email     String  @unique
+  password  String
+  role      Role    @default(USER)
+  status    Boolean @default(true)
+  isDeleted Boolean @default(false)
+
+  // For employees: link to their ADMIN
+  adminId   String?
+  admin     User?    @relation("AdminEmployees", fields: [adminId], references: [id])
+  employees User[]   @relation("AdminEmployees") // ADMIN can list their employees
+
+  // Enquiries assigned to this USER
+  assignedEnquiries Enquiry[] @relation("AssignedEnquiries")
+
+  // Services owned by this ADMIN
+  services Service[] @relation("AdminServices")
+
+  assignedLeads Lead[] @relation("AssignedLeads")
+
+  assignedByEnquiries Enquiry[] @relation("AssignedBy")
+  assignedByLeads Lead[] @relation("AssignedByLeads")
+
+  leadNotes LeadNote[]
+
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ------------------------------
+// CUSTOMER (created when enquiry converted to lead)
+// ------------------------------
+model Customer {
+  id        String @id @default(uuid())
+  firstName String
+  lastName  String
+  email     String
+  phone     String?
+
+  enquiries Enquiry[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([email])
+}
+
+// ------------------------------
+// MASTER CATEGORY (SUPER_ADMIN CRUD ONLY)
+// ------------------------------
+model Category {
+  id        String @id @default(uuid())
+  name      String @unique
+  services  Service[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  isDeleted Boolean @default(false)
+}
+
+// ------------------------------
+// SERVICE (Under Category, owned by ADMIN)
+// ------------------------------
+model Service {
+  id         String @id @default(uuid())
+  name       String
+  categoryId String
+  adminId    String
+
+  category  Category @relation(fields: [categoryId], references: [id])
+  admin     User     @relation("AdminServices", fields: [adminId], references: [id])
+  enquiries Enquiry[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  isDeleted Boolean @default(false)
+}
+
+// ------------------------------
+// ENQUIRY MODULE
+// ------------------------------
+model Enquiry {
+  id String @id @default(uuid())
+
+  name        String
+  email       String
+  phone       String?
+  description String?
+
+  serviceId String
+  service   Service @relation(fields: [serviceId], references: [id])
+
+  assignedToId String?
+  assignedTo   User?   @relation("AssignedEnquiries", fields: [assignedToId], references: [id])
+
+  customerId String?
+  customer   Customer? @relation(fields: [customerId], references: [id])
+
+  status EnquiryStatus @default(NEW)
+
+  assignedById String?
+  assignedBy   User? @relation("AssignedBy", fields: [assignedById], references: [id])
+
+  isDeleted Boolean @default(false)
+
+  
+  lead Lead?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ------------------------------
+// LEAD MODULE (NEW)
+// ------------------------------
+model Lead {
+  id String @id @default(uuid())
+
+  name        String
+  email       String
+  phone       String?
+  description String?
+
+  // (NEW / DONE)
+  status LeadStatus @default(NEW)
+
+  // (1 enquiry = 1 lead)
+  enquiryId String @unique
+  enquiry   Enquiry @relation(fields: [enquiryId], references: [id])
+
+  assignedToId String?
+  assignedTo   User? @relation("AssignedLeads", fields: [assignedToId], references: [id])
+
+  assignedById String?
+  assignedBy   User? @relation("AssignedByLeads", fields: [assignedById], references: [id])
+
+  notes LeadNote[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+
+//--------------------------------
+//Lead Note Module 
+//--------------------------------
+
+model LeadNote {
+  id          String   @id @default(uuid())
+
+  note        String
+
+  leadId      String
+  lead        Lead     @relation(fields: [leadId], references: [id])
+
+  createdById String
+  createdBy   User     @relation(fields: [createdById], references: [id])
+
+  createdAt   DateTime @default(now())
+}
+
+// ------------------------------
+// ENUMS
+// ------------------------------
+enum EnquiryStatus {
+  NEW
+  IN_PROGRESS
+  CLOSED
+}
+
+enum LeadStatus {
+  NEW
+  INTERESTED
+  FOLLOW_UP
+  NEGOTIATION
+  COMPLETED
+  CLOSED_WON
+  CLOSED_LOST
+  NOT_INTERESTED
+}
+
+enum Role {
+  SUPER_ADMIN
+  ADMIN
+  USER
+}
+
+
+
